@@ -1,7 +1,10 @@
 # networking-lab 3
+ARQ = Automatic Repeat reQuest(Query)
 
 todo:
-- add client
+- add client-side understanding of ACK
+- server-side is the one that needs to reorder packets
+- incorporate my rdt with httpc and httpfs
 
 - improve comments and code readability
 - (from A2) correct parsing of the request should split on \r\n not the current ~
