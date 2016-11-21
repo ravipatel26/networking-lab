@@ -2,11 +2,11 @@
 ARQ = Automatic Repeat reQuest(Query)
 
 todo:
-- add client-side understanding of ACK
-- server-side is the one that needs to reorder packets
-- incorporate my rdt with httpc and httpfs
+- add client-side understanding of ACK? (kindof already does)
+- client/and server need to validate data/AKS/HS_ACKs based on what theri expecting
+    - remember the current RECEIVER side is always first to move to next phase
 
-- improve comments and code readability
+- improve comments and code readability, re-modulate code to my liking
 - (from A2) correct parsing of the request should split on \r\n not the current ~
     this will make compatible with curl
 
@@ -23,6 +23,9 @@ done:
 - finish adding handshake server-side
     (packet_type: 0=data 1=ack 2=nak 3=handshake_req 4=handshake_ack 5=handshake_nak?)
 - finish implementing handshake client-side
+- added server sliding window?
+- server-side is the one that needs to reorder packets
+- incorporate my rdt with httpc and httpfs
 
 
 
@@ -44,11 +47,7 @@ done:
     < 1013 bytes: payload
 
 
-
-
-
-
- # Things i'm learning
+ # What I'm learning
 TCP is a 'stream oriented' protocol ensuring all data is transmitted in order
 UDP is a 'message oriented' protocolUDP messages must
     fit within a single packet (for IPv4, that means they can only hold 65,507 bytes
@@ -63,4 +62,5 @@ Endianness...
 
 
  # dropped ideas
+ see: dropped_ideas/
 

@@ -4,7 +4,7 @@ import argparse
 import sys
 
 
-def validate_keyval_syntax(param, fh):
+def validate_keyval_syntax(param):
     if param.count(':') == 1:
         key = param.rpartition(':')[0]
         val = param.rpartition(':')[2]
@@ -23,10 +23,10 @@ def validate_keyval_syntax(param, fh):
             return str(key + ":" + val)
         else:
             print ("Error, blanks before/after \':\'. "
-                   "in this param: \'" + key + ":" + val + "\', Omitting param.", file=fh)
+                   "in this param: \'" + key + ":" + val + "\', Omitting param.")
             return ""
     else:
-        print("Error, format is (key:value )+, missing \':\', Omitting param.", file=fh)
+        print("Error, format is (key:value )+, missing \':\', Omitting param.")
         return ""
 
 
@@ -60,32 +60,32 @@ def main():
         args = parser.parse_args()
 
         # check if output file specified
-        if args.outfile is not None:
+        '''if args.outfile is not None:
             print ("Output will now be redirected to specified outfile...")
             fh = args.outfile
         else:
-            fh = sys.stdout
+            fh = sys.stdout'''
 
         first = True
         headers = ""
 
         # validate custom header syntax if there were any specified (--h)
         if args.custom_headers is not None:
-            print ("Processing Custom Headers (-h)...", file=fh)
+            print ("Processing Custom Headers (-h)...")
             for cust_header in args.custom_headers:
                 if first:
                     first = False
-                    headers += validate_keyval_syntax(cust_header, fh)
+                    headers += validate_keyval_syntax(cust_header)
                 else:
-                    headers += "~" + validate_keyval_syntax(cust_header, fh)
+                    headers += "~" + validate_keyval_syntax(cust_header)
 
         if args.method.lower() == "get":
 
             # if method is get, ensure that nothing was specified for the -d or -f args
             if args.inline_data is not None or args.infile is not None:
-                print ("inline-data or external file data should not be used with \'GET\'", file=fh)
+                print ("inline-data or external file data should not be used with \'GET\'")
             else:
-                request_methods.get(args.URL, args.v, headers, fh)
+                request_methods.get(args.URL, args.v, headers)
 
         elif args.method.lower() == "post":
             key_val = ""
@@ -93,36 +93,35 @@ def main():
             # if method is post, ensure get or post specified but not both.
             if args.inline_data is not None and args.infile is None:
                 # if attributes set, validate them and insert into dict collection
-                print ("Processing Inline Data (-d)...", file=fh)
+                print ("Processing Inline Data (-d)...")
                 for dat in args.inline_data:
                     if first:
                         first = False
-                        key_val += validate_keyval_syntax(dat, fh)
+                        key_val += validate_keyval_syntax(dat)
                     else:
-                        key_val += "~" + validate_keyval_syntax(dat, fh)
+                        key_val += "~" + validate_keyval_syntax(dat)
 
-                print ("keyval: " + key_val, fh)
-                request_methods.post(args.URL, args.v, headers, key_val, fh)
+                print ("keyval: " + key_val)
+                request_methods.post(args.URL, args.v, headers, key_val)
 
             elif args.infile is not None and args.inline_data is None:
-                print ("Processing File (-f)...", file=fh)
+                print ("Processing File (-f)...")
                 for line in args.infile.readlines():
-                    print ("This is a line: " + line, file=fh)
+                    print ("This is a line: " + line)
                     if first:
                         first = False
-                        key_val += validate_keyval_syntax(line, fh)
+                        key_val += validate_keyval_syntax(line)
                     else:
-                        key_val += "~" + validate_keyval_syntax(line, fh)
+                        key_val += "~" + validate_keyval_syntax(line)
 
-                print ("keyval: " + key_val, fh)
-                request_methods.post(args.URL, args.v, headers, key_val, fh)
+                print ("keyval: " + key_val)
+                request_methods.post(args.URL, args.v, headers, key_val)
 
             else:
-                print ("Error, \'POST\' must specify -d or -f, but not both.", file=fh)
+                print ("Error, \'POST\' must specify -d or -f, but not both.")
         else:
-            print ("Error, method must be either \'GET\' or \'POST\'.", file=fh)
+            print ("Error, method must be either \'GET\' or \'POST\'.")
 
-        fh.close()
 
 
 if __name__ == "__main__":

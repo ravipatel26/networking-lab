@@ -1,12 +1,13 @@
-import json
 import socket
 import os
-import re
+import os.path
+import udp_client
+import sys
 
 CRLF = "\r\n\r\n"
 
 # Printing out the correct version of the http protocol and the return status code
-def print_response(r, v, fh):
+def print_response(r, v):
     # if verbose, print fancy headers and content, otherwise just the content
     if v:
         status = ""
@@ -18,12 +19,12 @@ def print_response(r, v, fh):
             status = "HTTP/2.0 "
 
         # print breadcrumbs if there were 30x redirects
-        print (r.history, file=fh)
+        print (r.history)
         if r.history:
-            print ("\nYou were redirected " + str(len(r.history)) + " times, here was your path:", file=fh)
+            print ("\nYou were redirected " + str(len(r.history)) + " times, here was your path:")
             for resp in r.history:
-                print (status + str(resp.status_code) + " " + resp.url, file=fh)
-            print ("\nFinally: " + r.url, file=fh)
+                print (status + str(resp.status_code) + " " + resp.url)
+            print ("\nFinally: " + r.url)
 
         if r.status_code == 200:
             status += "200 OK"
@@ -31,7 +32,7 @@ def print_response(r, v, fh):
 
             #f = sys.stdout
             for e in r.headers:
-                print (e + ": " + r.headers[e], file=fh)
+                print (e + ": " + r.headers[e])
 
             '''print(status)
             print("Server: " + r.headers['Server'])
@@ -44,10 +45,8 @@ def print_response(r, v, fh):
             '''
 
     # print(r.content['args'])
-    print(r.text, file=fh)
+    print(r.text)
     # print(r.json())
-
-    fh.close()
 
 
 # parses the url (only for localhost (NOT ROBUST YET)) required format: host:port/[file]
@@ -68,33 +67,19 @@ def parse_host_port(url):
     return HOST, int(PORT), requested_file
 
 
-def get(url, v, custom_headers, outfile):
-    print("Using GET", file=outfile)
+def get(url, v, custom_headers):
+    print("Using GET")
     if url.count(':') >= 1:
         HOST, PORT, requested_file = parse_host_port(url)
         print (HOST, PORT, requested_file)
 
-    # GET the URL  <--------
-    # r = requests.get(url, headers=custom_headers)
+    request = str(requested_file) + " " + str(custom_headers)
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    """
-    ***********************************************************************************
-    * Note that the connect() operation is subject to the timeout setting,
-    * and in general it is recommended to call settimeout() before calling connect()
-    * or pass a timeout parameter to create_connection().
-    * The system network stack may return a connection timeout error of its own
-    * regardless of any Python socket timeout setting.
-    ***********************************************************************************
-    """
+    udp_client.handshake_and_send(HOST, PORT, "GET", request, "")
+
+    '''s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
     s.settimeout(0.30)
-    """
-    **************************************************************************************
-    * Avoid socket.error: [Errno 98] Address already in use exception
-    * The SO_REUSEADDR flag tells the kernel to reuse a local socket in TIME_WAIT state,
-    * without waiting for its natural timeout to expire.
-    **************************************************************************************
-    """
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     # s.setblocking(0)
     s.connect((HOST, PORT))
@@ -106,11 +91,11 @@ def get(url, v, custom_headers, outfile):
     s.close()
     print ('\nReceived from server: \n' + str(repr(data)).replace("\\n", "\n"))
 
-    #print_response(r, v, outfile)
+    #print_response(r, v)'''
 
 
-def post(url, v, custom_headers, inline_data, outfile):
-    print("Using POST", file=outfile)
+def post(url, v, custom_headers, inline_data):
+    print("Using POST")
 
     # r = requests.post(url, headers=custom_headers, data=json.dumps(data_dict))
     if url.count(':') >= 1:
@@ -131,6 +116,39 @@ def post(url, v, custom_headers, inline_data, outfile):
     # https://docs.python.org/2/howto/sockets.html#disconnecting
     s.shutdown(1)
     s.close()
-    print ('\nReceived from server: \n' + str(repr(data)).replace("\\n", "\n"), file=outfile)
+    print ('\nReceived from server: \n' + str(repr(data)).replace("\\n", "\n"))
 
-    #print_response(r, v, outfile)
+    #print_response(r, v)
+
+
+# initialize our list of packets to send
+def init_packet_list(packets_list, request, infile):
+    current_payload = ""
+    for ch in request:
+        if sys.getsizeof(current_payload) < 1010:
+            current_payload += ch
+        else:
+            packets_list.append(current_payload)
+            current_payload = ch
+
+    if len(current_payload) > 0:
+        packets_list.append(current_payload)
+
+    if len(packets_list) > 0:
+        # just add spaces at beginning and end for splitting at server
+        packets_list[0] = " " + str(packets_list[0])
+        packets_list[-1] = " " + str(packets_list[-1])
+
+    if os.path.isfile(infile):
+        print ("is file?")
+        with open(infile, 'rb') as i:
+            while True:
+                chunk = i.read(1012)
+                if chunk:
+                    print (chunk)
+                    packets_list.append(chunk)
+                else:
+                    break
+        i.close()
+
+    return packets_list
