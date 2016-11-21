@@ -51,9 +51,10 @@ def handshake_and_listen(data, sender):
             WINDOW_SIZE = int(payload[2])
 
             # send handshake accept packet
-            p.packet_type = 4  # handshake SYN
-            p.payload = str(port).encode("utf-8")
-            conn.sendto(p.to_bytes(), sender)
+            a = p
+            a.packet_type = 4  # handshake SYN
+            a.payload = str(port).encode("utf-8")
+            conn.sendto(a.to_bytes(), sender)
 
             # what threads (seq# being handled) are actively working
             window_status = deque()
@@ -80,9 +81,18 @@ def handshake_and_listen(data, sender):
             while True:
                 conn.settimeout(timeout)
                 data, sender = conn.recvfrom(1024)
-                threading.Thread(target=handle_client, args=(conn, data, sender, last_pkt, packets_list,
-                                                             request_processor, window_status, msg_buffer,
-                                                             slide_window, buffer_avail)).start()
+
+                p = Packet.from_bytes(data)
+
+                # if handshake request, just send handshake ack
+                if p.packet_type == 3:
+                    conn.sendto(a.to_bytes(), sender)
+                # if response data, handle it
+                elif p.packet_type == 0:
+
+                    threading.Thread(target=handle_client, args=(conn, data, sender, last_pkt, packets_list,
+                                                                 request_processor, window_status, msg_buffer,
+                                                                 slide_window, buffer_avail)).start()
 
         except socket.timeout:
             print('No response after {}s, timing out'.format(timeout))
@@ -103,136 +113,181 @@ def handshake_and_listen(data, sender):
 
 def handle_client(conn, data, sender, last_pkt, packets_list, request_processor,
                   window_status, waiting_pkts, slide_window, lock):
-    try:
-        terminate_thread = False
-        p = Packet.from_bytes(data)
 
-        p.packet_type = 1  # ACK
-        print("Router: ", sender)
-        print("Packet: ", p)
-        print("Payload: ", p.payload.decode("utf-8"))
+    terminate_thread = False
+    p = Packet.from_bytes(data)
 
-        # send ack
-        conn.sendto(p.to_bytes(), sender)
+    # youre expecting data, not an errant ack(1) or handshake/response (3/4)
+    if p.packet_type == 0:
 
-        # if the packet has already been acked (out of window, or window empty), ack it again
-        if len(window_status) > 0:
-            if p.seq_num < window_status[0]:
-                print ("Thread w/seq# {} is re-ACKed".format(p.seq_num))
+        try:
 
-            else:
+            print("Router: ", sender)
+            print("Packet: ", p)
+            seq = p.seq_num
+            payload = p.payload.decode("utf-8")
+            print("Payload: ", payload)
 
-                # if there's already a matching seq# waiting, just terminate
-                # if not append to registered waiting packet threads
-                while True:
-                    have_lock = lock.acquire(0)
-                    try:
-                        if have_lock:
-                            for i in waiting_pkts:
-                                if i == p.seq_num:
-                                    terminate_thread = True
-                                    break
+            # Create and send simple ack
+            a = p
+            a.packet_type = 1  # ACK
+            a.payload = ''.encode()
+            conn.sendto(a.to_bytes(), sender)
 
-                    finally:
-                        if have_lock:
-                            if not terminate_thread:
-                                waiting_pkts.append(p.seq_num)
+            # if the packet has already been acked (out of window, or window empty), ack it again
+            if len(window_status) > 0:
+                if seq < window_status[0]:
+                    print ("Thread w/seq# {} is re-ACKed".format(seq))
 
-                            lock.release()
-                            break
-
-                # skip this if this is a dup of a waiting packet
-                if not terminate_thread:
-                    with slide_window:
-                        while p.seq_num != window_status[0]:
-                            # else set this thread to wait
-                            print ("Thread w/seq# {} is waiting to append.".format(p.seq_num))
-                            print (window_status)
-                            slide_window.wait()
-
-                        # this thread is now oldest in window...
-                        # append to request_str, slide window, remove from waiting pkts list
-                        # and nofify all waiting threads
-                        print ("Thread w/seq# {} is appending, sliding window".format(p.seq_num))
-                        request_processor.add_to_request(p.payload.decode("utf-8"))
-                        if p.seq_num < last_pkt:
-                            window_status.append(window_status[-1]+1)
-                        window_status.popleft()
-
-                        while True:
-                            have_lock = lock.acquire(0)
-                            try:
-                                if have_lock:
-                                    for i in waiting_pkts:
-                                        if i <= p.seq_num:
-                                            waiting_pkts.remove(i)
-
-                            finally:
-                                if have_lock:
-                                    lock.release()
-                                    break
-
-                        f = open(logfile, 'a')
-                        f.write(p.payload.decode("utf-8") + "\n")
-                        f.close()
-
-                        slide_window.notifyAll()
-
-    except Exception as e:
-        print("Handle client Error: ", e)
-        exc_type, exc_obj, exc_tb = sys.exc_info()
-        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
-        print(exc_type, fname, exc_tb.tb_lineno)
-
-    if p.seq_num == last_pkt:
-        while True:
-            have_lock = lock.acquire(0)
-            try:
-                if have_lock:
-                    print ("final thread finishing, string: " + request_processor.get_request())
-                    # output to file
-                    f = open(logfile, 'a')
-                    f.write(str(window_status) + "\n" + str(waiting_pkts))
-                    f.close()
-
-                    # spawn threads to start sending the response
-                    packets_list = request_methods.init_packet_list(packets_list, request_processor.process(), "")
-                    last_pkt = len(packets_list) - 1
-
-                    response_waiting_pkts = deque()
-                    response_window_status = deque()
-                    for i in range(0, WINDOW_SIZE):
-                        if i <= last_pkt:
-                            response_window_status.append(i)
-                        else:
-                            break
-
-                    print ("{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n".format(sender, p.peer_ip_addr, p.peer_port,
-                                                   conn, packets_list, last_pkt,
-                                                   response_window_status, response_waiting_pkts))
-
-                    #rehandshake and listen because client needs to know num packets in response
-                    #todo rehandshake
-                    #
-                    #######
-                    ###
-
-                    for seq in range(0, WINDOW_SIZE):
-                        if seq <= last_pkt:
-                            window_status.append(seq)
-                            threading.Thread(target=udp_send_response,
-                                             args=(sender, p.peer_ip_addr, p.peer_port,
-                                                   conn, seq, packets_list, last_pkt,
-                                                   response_window_status, waiting_pkts, slide_window, lock)).start()
-                        else:
-                            break
-
-            finally:
-                if have_lock:
-                    lock.release()
-                    break
                 else:
-                    break
+
+                    # if there's already a matching seq# waiting, just terminate
+                    # if not append to registered waiting packet threads
+                    while True:
+                        have_lock = lock.acquire(0)
+                        try:
+                            if have_lock:
+                                for i in waiting_pkts:
+                                    if i == seq:
+                                        terminate_thread = True
+                                        break
+
+                        finally:
+                            if have_lock:
+                                if not terminate_thread:
+                                    waiting_pkts.append(seq)
+
+                                lock.release()
+                                break
+
+                    # skip this if this is a dup of a waiting packet
+                    if not terminate_thread:
+                        with slide_window:
+                            while seq != window_status[0]:
+                                # else set this thread to wait
+                                print ("Thread w/seq# {} is waiting to append.".format(seq))
+                                print (window_status)
+                                slide_window.wait()
+
+                            ####################################################################
+                            # this thread is now oldest in window...
+                            # append to request_str, slide window, remove from waiting pkts list
+                            # and nofify all waiting threads
+                            print ("Thread w/seq# {} is appending, sliding window".format(seq))
+                            print("RECHECK Payload: ", payload)
+                            request_processor.add_to_request(payload)
+                            if seq < last_pkt:
+                                window_status.append(window_status[-1]+1)
+                            window_status.popleft()
+
+                            while True:
+                                have_lock = lock.acquire(0)
+                                try:
+                                    if have_lock:
+                                        for i in waiting_pkts:
+                                            if i <= seq:
+                                                waiting_pkts.remove(i)
+
+                                finally:
+                                    if have_lock:
+                                        lock.release()
+                                        break
+
+                            f = open(logfile, 'a')
+                            f.write(payload + "\n")
+                            f.close()
+
+                            slide_window.notifyAll()
+
+                            if p.seq_num == last_pkt:
+                                while True:
+                                    have_lock = lock.acquire(0)
+                                    try:
+                                        if have_lock:
+                                            print ("final thread finishing, string: " + request_processor.get_request())
+                                            # output to file
+                                            f = open(logfile, 'a')
+                                            f.write(str(window_status) + "\n" + str(waiting_pkts))
+                                            f.close()
+                                            print(packets_list)
+
+                                            # spawn threads to start sending the response
+                                            packets_list = request_methods.init_packet_list(packets_list,
+                                                                                            request_processor.process(),
+                                                                                            "")
+                                            print(packets_list)
+                                            last_pkt = len(packets_list) - 1
+
+                                            response_waiting_pkts = deque()
+                                            response_window_status = deque()
+                                            for i in range(0, WINDOW_SIZE):
+                                                if i <= last_pkt:
+                                                    response_window_status.append(i)
+                                                else:
+                                                    break
+
+                                            # print ("{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n".format(sender, p.peer_ip_addr, p.peer_port,
+                                            #                               conn, packets_list, last_pkt,
+                                            #                               response_window_status, response_waiting_pkts))
+
+                                            # rehandshake and listen because client needs to know num packets in response
+                                            # todo rehandshake
+                                            ############################################################################
+                                            re_handshake_accepted = False
+                                            a.packet_type = 5
+                                            a.payload = str(len(packets_list) - 1).encode()
+                                            timeout = 5
+                                            conn.settimeout(timeout)
+                                            tries = 1
+
+                                            print("Router: ", sender)
+                                            print("Packet: ", a)
+                                            print("Payload: ", a.payload.decode("utf-8"))
+
+                                            while not re_handshake_accepted:
+                                                try:
+                                                    if tries <= 5:
+                                                        conn.sendto(a.to_bytes(), sender)
+                                                        data, sender = conn.recvfrom(1024)
+                                                        hs_pkt = Packet.from_bytes(data)
+                                                        if hs_pkt.packet_type == 6:
+                                                            re_handshake_accepted = True
+                                                    else:
+                                                        break
+
+                                                except socket.timeout:
+                                                    if tries <= 3:
+                                                        print(
+                                                        'No re-handshake response after {}s, timing out try {}/3'.format(
+                                                            timeout, tries))
+                                                        tries += 1
+                                                    else:
+                                                        break
+                                                continue
+
+                                            if re_handshake_accepted:
+                                                # re-handshake accepted, starting to send data packets
+                                                for seq in range(0, WINDOW_SIZE):
+                                                    if seq <= last_pkt:
+                                                        window_status.append(seq)
+                                                        threading.Thread(target=udp_send_response,
+                                                                         args=(sender, p.peer_ip_addr, p.peer_port,
+                                                                               conn, seq, packets_list, last_pkt,
+                                                                               response_window_status, waiting_pkts,
+                                                                               slide_window, lock)).start()
+                                                    else:
+                                                        break
+
+                                    finally:
+                                        if have_lock:
+                                            lock.release()
+                                            break
+
+        except Exception as e:
+            print("Handle client Error: ", e)
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
 
 
 def udp_send_response(sender, peer_ip, peer_port, conn, seq,
@@ -280,22 +335,23 @@ def udp_send_response(sender, peer_ip, peer_port, conn, seq,
                 response, sender = conn.recvfrom(1024)
                 # If a packet is received, check matching seq #
                 rp = Packet.from_bytes(response)
-                if rp.seq_num == seq:
-                    print("Received correct packet # " + seq_num)
-                    resend = False
-                else:
-                    print("Was expecting " + seq_num + ", but got " + str(rp.seq_num) +
-                          ", buffering it, search buf before resend.")
-                    while True:
-                        have_lock = lock.acquire(0)
-                        try:
-                            if have_lock:
-                                msg_buffer.append(rp)
+                if rp.packet_type == 1:
+                    if rp.seq_num == seq:
+                        print("Received correct packet # " + seq_num)
+                        resend = False
+                    else:
+                        print("Was expecting " + seq_num + ", but got " + str(rp.seq_num) +
+                              ", buffering it, search buf before resend.")
+                        while True:
+                            have_lock = lock.acquire(0)
+                            try:
+                                if have_lock:
+                                    msg_buffer.append(rp)
 
-                        finally:
-                            if have_lock:
-                                lock.release()
-                                break
+                            finally:
+                                if have_lock:
+                                    lock.release()
+                                    break
 
         except OverflowError:
             print('\nOverflow Error (seq # got too big?)\n')

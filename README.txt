@@ -2,9 +2,7 @@
 ARQ = Automatic Repeat reQuest(Query)
 
 todo:
-- add client-side understanding of ACK? (kindof already does)
-- client/and server need to validate data/AKS/HS_ACKs based on what theri expecting
-    - remember the current RECEIVER side is always first to move to next phase
+- the request string is not formatted properly on its way to through request_methods and to the server
 
 - improve comments and code readability, re-modulate code to my liking
 - (from A2) correct parsing of the request should split on \r\n not the current ~
@@ -26,6 +24,9 @@ done:
 - added server sliding window?
 - server-side is the one that needs to reorder packets
 - incorporate my rdt with httpc and httpfs
+- add client-side understanding of ACK? (kindof already does)
+- client/and server need to validate data/AKS/HS_ACKs based on what theri expecting
+    - remember the current RECEIVER side is always first to move to next phase
 
 
 

@@ -102,7 +102,11 @@ def post(url, v, custom_headers, inline_data):
         HOST, PORT, requested_file = parse_host_port(url)
         print (HOST, PORT, requested_file, inline_data)
 
-    # r = requests.get(url, headers=custom_headers)
+    request = str(requested_file) + " " + str(inline_data)
+
+    udp_client.handshake_and_send(HOST, PORT, "POST", request, "")
+
+    ''''# r = requests.get(url, headers=custom_headers)
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(0.30)
@@ -118,11 +122,12 @@ def post(url, v, custom_headers, inline_data):
     s.close()
     print ('\nReceived from server: \n' + str(repr(data)).replace("\\n", "\n"))
 
-    #print_response(r, v)
+    #print_response(r, v)'''
 
 
 # initialize our list of packets to send
 def init_packet_list(packets_list, request, infile):
+
     current_payload = ""
     for ch in request:
         if sys.getsizeof(current_payload) < 1010:
@@ -134,10 +139,10 @@ def init_packet_list(packets_list, request, infile):
     if len(current_payload) > 0:
         packets_list.append(current_payload)
 
-    if len(packets_list) > 0:
+    '''if len(packets_list) > 0:
         # just add spaces at beginning and end for splitting at server
         packets_list[0] = " " + str(packets_list[0])
-        packets_list[-1] = " " + str(packets_list[-1])
+        packets_list[-1] = " " + str(packets_list[-1])'''
 
     if os.path.isfile(infile):
         print ("is file?")
@@ -151,4 +156,7 @@ def init_packet_list(packets_list, request, infile):
                     break
         i.close()
 
+    print ("check packets list in initpacklist: ")
+    for i in packets_list:
+        print ("~" + i + "~")
     return packets_list
