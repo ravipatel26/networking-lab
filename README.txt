@@ -11,9 +11,7 @@ Theres just a few little bugs left to work out and then implement POST
 
 
 todo:
-- Client side problem with response window status
-    potential sol: maybe not keep passing in a fresh window_status on each rec, yeah probably this, will fix
-- implement POST
+- (optional) start server with httpc.py and reimplement the starting dir option
 
 - improve comments and code readability, re-modulate code to my liking
 - (from A2) correct parsing of the request should split on \r\n not the current ~
@@ -39,6 +37,9 @@ done:
 - client/and server need to validate data/AKS/HS_ACKs based on what theri expecting
     - remember the current RECEIVER side is always first to move to next phase
 - the request string is not formatted properly on its way to through request_methods and to the server
+- Client side problem with response window status
+    potential sol: maybe not keep passing in a fresh window_status on each rec, yeah probably this, will fix
+- implement POST
 
 
 

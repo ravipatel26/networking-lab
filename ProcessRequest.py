@@ -89,18 +89,20 @@ class ProcessRequest:
             # split on space "GET /file.html" -into-> ('GET','file.html',...)
 
             request_peices = self.request.split(' ')
-            file_requested = request_peices[0]  # get 2nd element
-            print('file requested: ' + file_requested)
+            file_requested = request_peices[0]
             request_headers = ''
 
-            if len(request_peices) > 2:
-                request_headers = request_peices[2]
+            if len(request_peices) > 1:
+                request_headers = request_peices[1]
 
-                # Check for URL arguments. Disregard them
-
+            # Check for URL arguments. Disregard them
             file_requested = file_requested.split('?')[0]  # disregard anything after '?'
 
-            #file_requested = file_requested.replace(' ', '')
+            ''''# add the given headers
+            if not request_headers == '' and not request_headers == '0':
+                heads = request_headers.split('~')
+                #todo
+            '''
 
             # in case no file specified, get list of files on server
             print ("\'"+file_requested+"\'")
@@ -124,9 +126,8 @@ class ProcessRequest:
                 print('Requesting a file.')
 
                 # remove first slash
-
                 file_requested = file_requested.split('/', 1)[1]
-                # clean desired filename for security
+                print('file requested: ' + file_requested)
 
                 if self.is_requested_file_string_malicious(file_requested):
                     set_headers.append('Content-Type:text/html')
@@ -185,7 +186,9 @@ class ProcessRequest:
 
             # get 2nd element (filename and trim off beginning /slash)
 
-            file_requested = request_elements[1].split('/', 1)[1]
+            file_requested = request_elements[0]
+            # remove first slash
+            file_requested = file_requested.split('/', 1)[1]
 
             if self.is_requested_file_string_malicious(file_requested):
                 response_content = "string: \'" + file_requested \
@@ -198,8 +201,7 @@ class ProcessRequest:
 
                 data = request_elements[2].split('~')
                 data = [d for d in data if d != '']
-                print('file requested and data list: ' + file_requested \
-                      + str(data))
+                print('file requested and data list: ' + file_requested + str(data))
 
                 overwrite = [d for d in data if d.lower()
                              == 'overwrite:true']
@@ -235,16 +237,15 @@ class ProcessRequest:
                     response_content = "File \'/" + file_requested \
                                        + "\' exists, specify overwrite:true"
 
-            server_response = response_headers.encode()  # return headers for GET and HEAD
-            server_response += bytes(response_content, 'utf8')  # return additional conten for GET only
+            server_response = str(response_headers)  # return headers for GET and HEAD
+            server_response += str(response_content) # return additional conten for GET only
 
             return server_response
         else:
 
             print('Unknown HTTP request method:' + self.method)
-            server_response = self._gen_headers(405, set_headers).encode()  # return headers for GET and HEAD
-            server_response += bytes('Unknown HTTP request method:'
-                                     + self.method, 'utf8')  # return additional conten for GET only
+            server_response = str(self._gen_headers(405, set_headers))  # return headers for GET and HEAD
+            server_response += str('Unknown HTTP request method:' + self.method) # return additional conten for GET only
 
             return server_response
 

@@ -77,22 +77,6 @@ def get(url, v, custom_headers):
 
     udp_client.handshake_and_send(HOST, PORT, "GET", request, "")
 
-    '''s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    s.settimeout(0.30)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    # s.setblocking(0)
-    s.connect((HOST, PORT))
-    s.send(bytes("GET " + str(requested_file) + " " + str(custom_headers), 'utf8'))
-    data = (s.recv(1000000))
-    # print (data)
-    # https://docs.python.org/2/howto/sockets.html#disconnecting
-    s.shutdown(1)
-    s.close()
-    print ('\nReceived from server: \n' + str(repr(data)).replace("\\n", "\n"))
-
-    #print_response(r, v)'''
-
 
 def post(url, v, custom_headers, inline_data):
     print("Using POST")
@@ -102,7 +86,8 @@ def post(url, v, custom_headers, inline_data):
         HOST, PORT, requested_file = parse_host_port(url)
         print (HOST, PORT, requested_file, inline_data)
 
-    request = str(requested_file) + " " + str(inline_data)
+    print (str(requested_file) + " " + str(custom_headers) + " " + str(inline_data))
+    request = str(requested_file) + " " + str(custom_headers) + " " + str(inline_data)
 
     udp_client.handshake_and_send(HOST, PORT, "POST", request, "")
 

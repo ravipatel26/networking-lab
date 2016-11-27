@@ -248,7 +248,7 @@ def handle_client(conn, data, sender, last_pkt, packets_list, request_processor,
                                             while not re_handshake_accepted:
                                                 try:
                                                     conn.settimeout(timeout)
-                                                    if tries <= 5:
+                                                    if tries <= 10:
                                                         conn.sendto(a.to_bytes(), sender)
                                                         data, sender = conn.recvfrom(1024)
                                                         hs_pkt = Packet.from_bytes(data)
@@ -258,9 +258,9 @@ def handle_client(conn, data, sender, last_pkt, packets_list, request_processor,
                                                         break
 
                                                 except socket.timeout:
-                                                    if tries <= 5:
+                                                    if tries <= 10:
                                                         print(
-                                                            'No re-handshake response after {}s, timing out try {}/5'.format(
+                                                            'No re-handshake response after {}s, timing out try {}/10'.format(
                                                                 timeout, tries))
                                                         tries += 1
                                                     else:

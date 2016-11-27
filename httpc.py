@@ -78,6 +78,8 @@ def main():
                     headers += validate_keyval_syntax(cust_header)
                 else:
                     headers += "~" + validate_keyval_syntax(cust_header)
+        else:
+            headers = '0'
 
         if args.method.lower() == "get":
 
@@ -89,6 +91,7 @@ def main():
 
         elif args.method.lower() == "post":
             key_val = ""
+            first = True
 
             # if method is post, ensure get or post specified but not both.
             if args.inline_data is not None and args.infile is None:
