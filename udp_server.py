@@ -13,10 +13,6 @@ M = 3
 SEQUENCE_NUM_LIMIT = 2**M # not used any more
 WINDOW_SIZE = 2**(M-1)
 
-window_status = deque()
-response_waiting_pkts = deque()
-response_window_status = deque()
-
 logfile = "server_logfile.txt"
 
 
@@ -61,6 +57,7 @@ def handshake_and_listen(data, sender):
             conn.sendto(a.to_bytes(), sender)
 
             # what threads (seq# being handled) are actively working
+            window_status = deque()
             for i in range(0, WINDOW_SIZE):
                 if i <= last_pkt:
                     window_status.append(i)
@@ -94,7 +91,7 @@ def handshake_and_listen(data, sender):
                 elif p.packet_type == 0:
 
                     threading.Thread(target=handle_client, args=(conn, data, sender, last_pkt, packets_list,
-                                                                 request_processor, msg_buffer,
+                                                                 request_processor, window_status, msg_buffer,
                                                                  slide_window, buffer_avail)).start()
 
         except socket.timeout:
@@ -115,7 +112,7 @@ def handshake_and_listen(data, sender):
 
 
 def handle_client(conn, data, sender, last_pkt, packets_list, request_processor,
-                  waiting_pkts, slide_window, lock):
+                  window_status, waiting_pkts, slide_window, lock):
 
     terminate_thread = False
     p = Packet.from_bytes(data)
@@ -227,6 +224,8 @@ def handle_client(conn, data, sender, last_pkt, packets_list, request_processor,
                                                 l.write(str(pack))
                                                 l.close()'''
 
+                                            response_waiting_pkts = deque()
+                                            response_window_status = deque()
                                             for i in range(0, WINDOW_SIZE):
                                                 if i <= last_pkt:
                                                     response_window_status.append(i)
@@ -276,7 +275,7 @@ def handle_client(conn, data, sender, last_pkt, packets_list, request_processor,
                                                         threading.Thread(target=udp_send_response,
                                                                          args=(sender, p.peer_ip_addr, p.peer_port,
                                                                                conn, seq, packets_list, last_pkt,
-                                                                               waiting_pkts,
+                                                                               response_window_status, response_waiting_pkts,
                                                                                slide_window, lock)).start()
                                                     else:
                                                         break
@@ -297,7 +296,7 @@ def handle_client(conn, data, sender, last_pkt, packets_list, request_processor,
 
 
 def udp_send_response(sender, peer_ip, peer_port, conn, seq,
-                 packets_list, last_pkt, msg_buffer, slide_window, lock):
+                 packets_list, last_pkt, window_status, msg_buffer, slide_window, lock):
 
     timeout = 3
     resend = True
@@ -388,7 +387,7 @@ def udp_send_response(sender, peer_ip, peer_port, conn, seq,
                 window_status.append(next_seq)
                 threading.Thread(target=udp_send_response,
                                  args=(sender, peer_ip, peer_port, conn, next_seq,
-                                       packets_list, last_pkt, msg_buffer,
+                                       packets_list, last_pkt, window_status, msg_buffer,
                                        slide_window, lock)).start()
 
             while True:
